@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OfflineClass — Offline-First School Sync Platform</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <!-- TOP STATUS BAR -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-badge">OC</span>
+      <span>OfflineClass</span>
+    </div>
+
+    <div class="status-bar-items">
+      <span id="conn-status-pill" class="pill pill-online">● Online</span>
+      <span id="sync-status-pill" class="pill pill-online">✓ Up to date</span>
+
+      <!-- Multi-Device Simulator Switcher -->
+      <label for="device-slot-selector" style="font-size:0.8rem; font-weight:600;">Active Device:</label>
+      <select id="device-slot-selector" style="padding:0.25rem 0.5rem; border-radius:6px; border:1px solid #cbd5e1; font-size:0.8rem;">
+        <option value="Device-A">Device A (Tablet 1)</option>
+        <option value="Device-B">Device B (Tablet 2)</option>
+        <option value="Device-Replacement">Replacement Device</option>
+      </select>
+      <small id="active-device-display" style="color:#475569; font-family:monospace;"></small>
+
+      <button id="toggle-offline-btn" class="btn btn-outline btn-sm">Go Offline (Simulate)</button>
+      <button id="manual-sync-btn" class="btn btn-primary btn-sm">↻ Sync Now</button>
+    </div>
+  </header>
+
+  <!-- LOGIN PAGE -->
+  <main id="login-view" class="login-wrapper">
+    <div class="card">
+      <div class="card-header">
+        <h2>Sign in to OfflineClass</h2>
+      </div>
+      <p style="font-size:0.88rem; color:#475569; margin-bottom:1rem;">
+        Rural School Student & Attendance Synchronisation Platform
+      </p>
+      <div id="login-error" class="pill pill-error hidden" style="margin-bottom:1rem; width:100%;"></div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-username">Username</label>
+          <input type="text" id="login-username" required value="teacher1" />
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" required value="teacher123" />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Sign In</button>
+      </form>
+
+      <hr style="margin:1.25rem 0; border:none; border-top:1px solid #e2e8f0;" />
+      <div style="font-size:0.82rem; color:#475569;">
+        <p><strong>Demo Credentials (Click to auto-fill):</strong></p>
+        <div style="display:flex; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('login-username').value='teacher1';document.getElementById('login-password').value='teacher123';">
+            Teacher 1 (teacher1 / teacher123)
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('login-username').value='teacher2';document.getElementById('login-password').value='teacher123';">
+            Teacher 2 (teacher2 / teacher123)
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('login-username').value='admin';document.getElementById('login-password').value='admin123';">
+            Admin (admin / admin123)
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- AUTHENTICATED APPLICATION SHELL -->
+  <div id="app-shell" class="app-layout hidden">
+    <aside class="sidebar">
+      <div style="padding:0.5rem 0.85rem; margin-bottom:0.5rem; border-bottom:1px solid #e2e8f0;">
+        <div id="user-badge" style="font-size:0.82rem; font-weight:700; color:#1d4ed8;"></div>
+        <button id="logout-btn" class="btn btn-outline btn-sm" style="margin-top:0.4rem; width:100%;">Sign Out</button>
+      </div>
+
+      <button class="nav-btn active" data-page="dashboard"><span>Teacher Dashboard</span></button>
+      <button class="nav-btn" data-page="students"><span>Student Records</span></button>
+      <button class="nav-btn" data-page="add-student"><span>Add Student</span></button>
+      <button class="nav-btn" data-page="attendance"><span>Mark Attendance</span></button>
+      <button class="nav-btn" data-page="attendance-history"><span>Attendance History</span></button>
+      <button class="nav-btn" data-page="sync-status">
+        <span>Sync & Recovery</span>
+        <span id="nav-pending-count" class="pill pill-offline">0</span>
+      </button>
+      <button class="nav-btn" data-page="conflicts">
+        <span>Conflict Resolution</span>
+        <span id="nav-conflict-count" class="pill pill-error">0</span>
+      </button>
+      <button class="nav-btn" data-page="admin"><span>Admin Dashboard</span></button>
+      <button class="nav-btn" data-page="testing"><span>System Testing</span></button>
+    </aside>
+
+    <main class="main-content">
+      <!-- TEACHER DASHBOARD -->
+      <section id="page-dashboard" class="page-section">
+        <div class="card-header">
+          <h2>Teacher Dashboard</h2>
+          <div style="display:flex; gap:0.5rem;">
+            <button class="btn btn-primary btn-sm" onclick="AppState.editingStudentId=null; navigateTo('add-student')">+ Add Student</button>
+            <button class="btn btn-outline btn-sm" onclick="navigateTo('attendance')">Mark Today's Attendance</button>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Local Students</div>
+            <div id="dash-total-students" class="stat-value">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Today's Attendance Marked</div>
+            <div id="dash-today-attendance" class="stat-value">0 / 0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pending Sync Operations</div>
+            <div id="dash-pending-ops" class="stat-value">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Unresolved Conflicts</div>
+            <div id="dash-unresolved-conflicts" class="stat-value">0</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>Recent Student Records on This Device</h3>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr><th>Roll No</th><th>Full Name</th><th>Class & Section</th><th>Sync Status</th></tr>
+              </thead>
+              <tbody id="dash-recent-students"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- STUDENT MANAGEMENT PAGE -->
+      <section id="page-students" class="page-section hidden">
+        <div class="card">
+          <div class="card-header">
+            <h2>Student Records</h2>
+            <button class="btn btn-primary btn-sm" onclick="AppState.editingStudentId=null; navigateTo('add-student')">+ New Student</button>
+          </div>
+          <div class="form-group">
+            <input type="text" id="student-search-input" placeholder="Search by student name, roll number, or class..." />
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>UUID</th><th>Roll No</th><th>Full Name</th><th>Class</th>
+                  <th>DOB (Encrypted)</th><th>Guardian Contact (Encrypted)</th><th>Status</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="students-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ADD / EDIT STUDENT PAGE -->
+      <section id="page-add-student" class="page-section hidden">
+        <div class="card">
+          <div class="card-header">
+            <h2 id="student-form-title">Add New Student</h2>
+          </div>
+          <form id="student-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="st-full-name">Full Name *</label>
+                <input type="text" id="st-full-name" required placeholder="e.g., Rahul Verma" />
+              </div>
+              <div class="form-group">
+                <label for="st-class">Class *</label>
+                <input type="text" id="st-class" required placeholder="e.g., 8" />
+              </div>
+              <div class="form-group">
+                <label for="st-section">Section *</label>
+                <input type="text" id="st-section" required placeholder="e.g., A" />
+              </div>
+              <div class="form-group">
+                <label for="st-roll">Roll Number *</label>
+                <input type="text" id="st-roll" required placeholder="e.g., 101" />
+              </div>
+              <div class="form-group">
+                <label for="st-dob">Date of Birth (Optional, AES-GCM Encrypted)</label>
+                <input type="date" id="st-dob" />
+              </div>
+              <div class="form-group">
+                <label for="st-contact">Guardian Contact (Optional, AES-GCM Encrypted)</label>
+                <input type="text" id="st-contact" placeholder="e.g., 9876543210" />
+              </div>
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+              <button type="submit" class="btn btn-primary">Save Student Record</button>
+              <button type="button" class="btn btn-outline" onclick="AppState.editingStudentId=null; navigateTo('students')">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ATTENDANCE MANAGEMENT PAGE -->
+      <section id="page-attendance" class="page-section hidden">
+        <div class="card">
+          <div class="card-header">
+            <h2>Daily Attendance Management</h2>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <label for="att-date-picker"><strong>Attendance Date:</strong></label>
+              <input type="date" id="att-date-picker" style="padding:0.4rem; border:1px solid #cbd5e1; border-radius:6px;" />
+            </div>
+          </div>
+          <p style="font-size:0.85rem; color:#475569; margin-bottom:1rem;">
+            Logical key: <code>(student_id, attendance_date)</code>. Works offline. Conflicting edits across devices are preserved for review.
+          </p>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr><th>Roll No</th><th>Student Name</th><th>Class</th><th>Current Status</th><th>Sync State</th><th>Mark Status</th></tr>
+              </thead>
+              <tbody id="attendance-mark-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ATTENDANCE HISTORY PAGE -->
+      <section id="page-attendance-history" class="page-section hidden">
+        <div class="card">
+          <div class="card-header">
+            <h2>Attendance History & Causal HLC Timestamps</h2>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Student</th><th>Status</th><th>Teacher</th><th>Device ID</th><th>HLC Timestamp</th><th>Sync State</th></tr>
+              </thead>
+              <tbody id="attendance-history-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SYNCHRONISATION STATUS & RECOVERY PAGE -->
+      <section id="page-sync-status" class="page-section hidden">
+        <div class="card">
+          <div class="card-header">
+            <h2>Synchronisation Engine & Pending Operation Log</h2>
+            <button class="btn btn-primary btn-sm" onclick="window.syncEngine.syncNow().then(refreshCurrentPage)">↻ Trigger Delta Sync</button>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Device Identifier</div>
+              <div id="sync-page-device-id" style="font-family:monospace; font-weight:700; margin-top:0.3rem;"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Current Device HLC</div>
+              <div id="sync-page-hlc" style="font-family:monospace; font-size:0.8rem; margin-top:0.3rem;"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Server Delta Cursor (Seq)</div>
+              <div id="sync-page-cursor" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Last Successful Sync</div>
+              <div id="sync-page-last-time" style="font-size:0.9rem; font-weight:600; margin-top:0.3rem;">Never</div>
+            </div>
+          </div>
+
+          <h3 style="margin-bottom:0.6rem;">Pending Unacknowledged Operations Queue (IndexedDB)</h3>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr><th>Operation UUID</th><th>Entity & Action</th><th>Entity ID</th><th>HLC</th><th>Status</th></tr>
+              </thead>
+              <tbody id="pending-ops-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Device-Loss Recovery & Encrypted Local Backup</h3>
+          </div>
+          <p style="font-size:0.88rem; color:#475569; margin-bottom:1rem;">
+            <strong>Synchronised records</strong> can always be downloaded onto a replacement device from the central server.
+            <strong>Unsynchronised pending operations</strong> can be recovered using an AES-GCM encrypted backup file.
+          </p>
+          <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+            <input type="password" id="backup-passphrase" value="offlineclass-backup-key" placeholder="Backup Passphrase" style="padding:0.5rem; border:1px solid #cbd5e1; border-radius:6px;" />
+            <button class="btn btn-outline" onclick="exportEncryptedBackup()">Export Encrypted Local Backup</button>
+            <label class="btn btn-outline" style="cursor:pointer;">
+              Import Encrypted Backup
+              <input type="file" accept=".json" style="display:none;" onchange="importEncryptedBackup(event)" />
+            </label>
+            <button class="btn btn-primary" onclick="restoreFromServerSnapshot()">Download Server Snapshot (Replacement Device)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONFLICT RESOLUTION PAGE -->
+      <section id="page-conflicts" class="page-section hidden">
+        <div class="card-header">
+          <h2>Domain-Aware Attendance Conflict Resolution</h2>
+        </div>
+        <p style="font-size:0.88rem; color:#475569; margin-bottom:1rem;">
+          When two devices submit incompatible attendance values for the same student and date, both operations are preserved here.
+        </p>
+        <div id="conflicts-list-container"></div>
+      </section>
+
+      <!-- ADMINISTRATOR DASHBOARD -->
+      <section id="page-admin" class="page-section hidden">
+        <div class="card-header">
+          <h2>Administrator System Overview</h2>
+          <button class="btn btn-outline btn-sm" onclick="navigateTo('conflicts')">Open Conflict Resolver</button>
+        </div>
+        <div id="admin-offline-notice" class="pill pill-offline hidden" style="margin-bottom:1rem;">
+          Device is currently in Offline Mode. Reconnect to fetch live central server statistics.
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-label">Total Students (Server)</div><div id="adm-students" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Total Teachers</div><div id="adm-teachers" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Attendance Records</div><div id="adm-attendance" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Registered Devices</div><div id="adm-devices" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Pending Local Ops</div><div id="adm-pending" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Successful Syncs</div><div id="adm-syncs" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Unresolved Conflicts</div><div id="adm-conflicts" class="stat-value">0</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Recently Synchronised Devices</h3>
+          <div class="table-responsive">
+            <table>
+              <thead><tr><th>Device ID</th><th>User ID</th><th>Last Sync Cursor</th><th>Last Seen</th></tr></thead>
+              <tbody id="adm-devices-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Recent Central Server Operation Log</h3>
+          <div class="table-responsive">
+            <table>
+              <thead><tr><th>Seq</th><th>Operation ID</th><th>Action</th><th>Device ID</th><th>HLC</th></tr></thead>
+              <tbody id="adm-activity-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SYSTEM TESTING & ANALYTICS DASHBOARD -->
+      <section id="page-testing" class="page-section hidden">
+        <div class="card-header">
+          <h2>System Testing & BIOS Telemetry Dashboard</h2>
+          <button class="btn btn-primary" onclick="runInteractiveDemonstrationSuite()">▶ Run All 10 Verification Tests Now</button>
+        </div>
+
+        <div id="metrics-empty-notice" class="card">
+          <p><strong>No synchronisation or test activity recorded yet.</strong> Click "Run All 10 Verification Tests Now" or perform a sync to compute real system metrics.</p>
+        </div>
+
+        <div id="metrics-grid-container" class="hidden">
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-label">Data-Loss Rate</div><div id="met-loss-rate" class="stat-value">0%</div></div>
+            <div class="stat-card"><div class="stat-label">Avg Sync Latency</div><div id="met-latency" class="stat-value">0 ms</div></div>
+            <div class="stat-card"><div class="stat-label">Avg Bytes / Sync</div><div id="met-bytes" class="stat-value">0 B</div></div>
+            <div class="stat-card"><div class="stat-label">Conflicts Preserved</div><div id="met-conflicts" class="stat-value">0</div></div>
+            <div class="stat-card"><div class="stat-label">Interrupted Recoveries</div><div id="met-interrupted" class="stat-value">0</div></div>
+            <div class="stat-card"><div class="stat-label">Duplicates Prevented</div><div id="met-dups" class="stat-value">0</div></div>
+          </div>
+          <div class="card">
+            <p style="font-size:0.85rem;">
+              <strong>Server SQLite Ciphertext Verification Sample (AES-256-GCM):</strong>
+              <code id="met-cipher-sample" style="word-break:break-all;"></code>
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Automated 10-Scenario Verification Results</h3>
+          <div class="table-responsive">
+            <table>
+              <thead><tr><th>Scenario</th><th>Result</th><th>Measured Evidence</th></tr></thead>
+              <tbody id="live-test-results-tbody">
+                <tr><td colspan="3">Click "Run All 10 Verification Tests Now" to execute live tests.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/static/js/clock.js"></script>
+  <script src="/static/js/encryption.js"></script>
+  <script src="/static/js/database.js"></script>
+  <script src="/static/js/sync.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
+
+6. Automated Pytest Suite (tests/)
+Covers all 10 required scenarios (authentication, offline queueing & sync, independent CRDT merges, simultaneous conflicting attendance edits, admin conflict resolution, idempotent duplicate operation replay, mid-batch interrupted sync recovery, HLC clock skew, device-loss recovery, encryption at rest, and post-sync regression).
